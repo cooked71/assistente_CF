@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fonte La Tavola</title>
+    <style>
+        :root {
+            --primary: #5A1A1A;
+            --accent: #C6A664;
+            --bg: #F9F6F0;
+            --text: #2C2C2C;
+            --bot-bg: #FFFFFF;
+            --user-bg: #5A1A1A;
+            --user-text: #FFFFFF;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Georgia', serif; }
+        body { background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+
+        header { position: relative; background-color: var(--primary); color: var(--accent); padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        header h1 { font-size: 1.5rem; font-weight: normal; letter-spacing: 1px; }
+        header p { font-size: 0.85rem; color: #E0D0B0; margin-top: 5px; font-family: sans-serif; }
+        #lingua-select { margin-top: 10px; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 15px; padding: 5px 10px; font-size: 0.85rem; font-family: sans-serif; }
+        #lingua-select option { color: var(--text); }
+        #settings-btn { position: absolute; right: 15px; top: 15px; width: 40px; height: 40px; background: transparent; color: var(--accent); font-size: 1.3rem; }
+
+        #settings { display: none; background: white; padding: 14px 20px; border-bottom: 1px solid #E5E0D5; font-family: sans-serif; font-size: 0.9rem; flex-direction: column; gap: 12px; }
+        #settings.open { display: flex; }
+        #settings label { display: flex; flex-direction: column; gap: 5px; color: var(--text); }
+        #settings select { padding: 10px; border: 1px solid #CCC; border-radius: 10px; font-size: 1rem; background: white; font-family: sans-serif; }
+        #prova-btn, .ascolta { width: auto; height: auto; border-radius: 20px; padding: 9px 16px; font-size: 0.9rem; font-family: sans-serif; background: var(--accent); color: var(--primary); }
+        .ascolta { margin-top: 10px; padding: 6px 12px; font-size: 0.8rem; }
+
+        #chat-container { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+
+        .message { max-width: 85%; padding: 15px 18px; border-radius: 20px; font-size: 1rem; line-height: 1.5; animation: fadeIn 0.3s ease; }
+        .bot { background-color: var(--bot-bg); border: 1px solid #E5E0D5; align-self: flex-start; border-bottom-left-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+        .user { background-color: var(--user-bg); color: var(--user-text); align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(90,26,26,0.2); font-family: sans-serif; }
+
+        .typing { font-style: italic; color: #888; font-size: 0.85rem; align-self: flex-start; display: none; font-family: sans-serif; }
+
+        #input-area { background: white; padding: 15px; border-top: 1px solid #E5E0D5; display: flex; gap: 10px; padding-bottom: max(15px, env(safe-area-inset-bottom)); align-items: center; }
+        input[type="text"] { flex: 1; padding: 12px 15px; border: 1px solid #CCC; border-radius: 25px; font-size: 1rem; outline: none; transition: border 0.2s; font-family: sans-serif; }
+        input[type="text"]:focus { border-color: var(--primary); }
+
+        button { border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 1.2rem; cursor: pointer; display: flex; justify-content: center; align-items: center; flex-shrink: 0; transition: transform 0.15s ease; }
+        button:active { transform: scale(0.95); }
+
+        #send-btn { background-color: var(--primary); color: white; }
+        #mic-btn { background-color: var(--accent); color: var(--primary); }
+        #mic-btn.listening { background-color: #d9534f; color: white; animation: pulse 1.5s infinite; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(217, 83, 79, 0); } 100% { box-shadow: 0 0 0 0 rgba(217, 83, 79, 0); } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Fonte La Tavola</h1>
+        <p id="sottotitolo"></p>
+        <select id="lingua-select" aria-label="Language"></select>
+        <button id="settings-btn" type="button">⚙️</button>
+    </header>
+
+    <div id="settings">
+        <label><span id="et-voce"></span>
+            <select id="voce-select"></select>
+        </label>
+        <button id="prova-btn" type="button"></button>
+        <label><span id="et-modo"></span>
+            <select id="modo-select">
+                <option value="microfono"></option>
+                <option value="sempre"></option>
+                <option value="mai"></option>
+            </select>
+        </label>
+    </div>
+
+    <div id="chat-container">
+        <div class="message bot" id="benvenuto"></div>
+        <div class="typing" id="typing-indicator"></div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="user-input" autocomplete="off">
+        <button id="mic-btn"></button>
+        <button id="send-btn">↑</button>
+    </div>
+
+    <script>
+        // =========================================================
+        //  TESTI DELL'INTERFACCIA, PER LINGUA
+        //  (le risposte dell'assistente le traduce il server)
+        // =========================================================
+        const I18N = {
+            it: { nome: 'Italiano', reco: 'it-IT',
+                sottotitolo: 'Il tuo assistente virtuale',
+                benvenuto: 'Benvenuto a Fonte La Tavola. Sono qui per raccontarti i nostri piatti e consigliarti il vino giusto. Cosa ti incuriosisce?',
+                segnaposto: 'Scrivi o parla...', pensando: 'Sto pensando...', impostazioni: 'Impostazioni voce',
+                voce: 'Voce', prova: '▶ Prova la voce', modo: 'Risposta vocale',
+                modoMic: 'Solo quando parlo io', modoSempre: 'Sempre', modoMai: 'Mai (solo testo)',
+                donna: 'donna', uomo: 'uomo', riascolta: '🔊 Riascolta', parla: 'Parla', invia: 'Invia',
+                errConn: "Scusa, c'è stato un problema di connessione. Riprova.", errSconosciuto: 'Errore sconosciuto',
+                micBloccato: "Microfono bloccato. Consenti l'accesso nelle impostazioni del browser.",
+                micNonSupp: 'Riconoscimento vocale non supportato', anteprimaNo: 'Anteprima non disponibile.' },
+            en: { nome: 'English', reco: 'en-US',
+                sottotitolo: 'Your virtual assistant',
+                benvenuto: "Welcome to Fonte La Tavola. I'm here to tell you about our dishes and suggest the right wine. What are you curious about?",
+                segnaposto: 'Type or speak...', pensando: 'Thinking...', impostazioni: 'Voice settings',
+                voce: 'Voice', prova: '▶ Try the voice', modo: 'Voice replies',
+                modoMic: 'Only when I speak', modoSempre: 'Always', modoMai: 'Never (text only)',
+                donna: 'woman', uomo: 'man', riascolta: '🔊 Listen again', parla: 'Speak', invia: 'Send',
+                errConn: 'Sorry, there was a connection problem. Please try again.', errSconosciuto: 'Unknown error',
+                micBloccato: 'Microphone blocked. Allow access in your browser settings.',
+                micNonSupp: 'Speech recognition not supported', anteprimaNo: 'Preview not available.' },
+            fr: { nome: 'Français', reco: 'fr-FR',
+                sottotitolo: 'Votre assistant virtuel',
+                benvenuto: "Bienvenue à Fonte La Tavola. Je suis là pour vous présenter nos plats et vous conseiller le vin idéal. Qu'est-ce qui vous intéresse ?",
+                segnaposto: 'Écrivez ou parlez...', pensando: 'Je réfléchis...', impostazioni: 'Réglages de la voix',
+                voce: 'Voix', prova: '▶ Essayer la voix', modo: 'Réponse vocale',
+                modoMic: 'Seulement quand je parle', modoSempre: 'Toujours', modoMai: 'Jamais (texte seul)',
+                donna: 'femme', uomo: 'homme', riascolta: '🔊 Réécouter', parla: 'Parler', invia: 'Envoyer',
+                errConn: 'Désolé, un problème de connexion est survenu. Réessayez.', errSconosciuto: 'Erreur inconnue',
+                micBloccato: "Microphone bloqué. Autorisez l'accès dans les réglages du navigateur.",
+                micNonSupp: 'Reconnaissance vocale non prise en charge', anteprimaNo: 'Aperçu indisponible.' },
+            de: { nome: 'Deutsch', reco: 'de-DE',
+                sottotitolo: 'Ihr virtueller Assistent',
+                benvenuto: 'Willkommen im Fonte La Tavola. Ich erzähle Ihnen gern von unseren Gerichten und empfehle den passenden Wein. Was interessiert Sie?',
+                segnaposto: 'Schreiben oder sprechen...', pensando: 'Ich denke nach...', impostazioni: 'Spracheinstellungen',
+                voce: 'Stimme', prova: '▶ Stimme testen', modo: 'Sprachantwort',
+                modoMic: 'Nur wenn ich spreche', modoSempre: 'Immer', modoMai: 'Nie (nur Text)',
+                donna: 'Frau', uomo: 'Mann', riascolta: '🔊 Erneut anhören', parla: 'Sprechen', invia: 'Senden',
+                errConn: 'Entschuldigung, es gab ein Verbindungsproblem. Bitte versuchen Sie es erneut.', errSconosciuto: 'Unbekannter Fehler',
+                micBloccato: 'Mikrofon blockiert. Erlauben Sie den Zugriff in den Browser-Einstellungen.',
+                micNonSupp: 'Spracherkennung wird nicht unterstützt', anteprimaNo: 'Vorschau nicht verfügbar.' },
+            es: { nome: 'Español', reco: 'es-ES',
+                sottotitolo: 'Su asistente virtual',
+                benvenuto: 'Bienvenido a Fonte La Tavola. Estoy aquí para contarle nuestros platos y aconsejarle el vino adecuado. ¿Qué le interesa?',
+                segnaposto: 'Escriba o hable...', pensando: 'Estoy pensando...', impostazioni: 'Ajustes de voz',
+                voce: 'Voz', prova: '▶ Probar la voz', modo: 'Respuesta por voz',
+                modoMic: 'Solo cuando hablo yo', modoSempre: 'Siempre', modoMai: 'Nunca (solo texto)',
+                donna: 'mujer', uomo: 'hombre', riascolta: '🔊 Volver a escuchar', parla: 'Hablar', invia: 'Enviar',
+                errConn: 'Lo siento, ha habido un problema de conexión. Inténtelo de nuevo.', errSconosciuto: 'Error desconocido',
+                micBloccato: 'Micrófono bloqueado. Permita el acceso en los ajustes del navegador.',
+                micNonSupp: 'Reconocimiento de voz no compatible', anteprimaNo: 'Vista previa no disponible.' }
+        };
+
+        // Voci per lingua: [chiave, nome, 0 = donna / 1 = uomo]
+        const VOCI = {
+            it: [['livia', 'Livia', 0], ['cinzia', 'Cinzia', 0], ['melia', 'Melia', 0], ['maia', 'Maia', 0], ['demetra', 'Demetra', 0],
+                 ['flavio', 'Flavio', 1], ['elio', 'Elio', 1], ['cesare', 'Cesare', 1], ['dionisio', 'Dionisio', 1]],
+            en: [['thalia', 'Thalia', 0], ['apollo', 'Apollo', 1]],
+            fr: [['agathe', 'Agathe', 0], ['hector', 'Hector', 1]],
+            de: [['viktoria', 'Viktoria', 0], ['julius', 'Julius', 1]],
+            es: [['celeste', 'Celeste', 0], ['nestor', 'Nestor', 1]]
+        };
+
+        const CHAT_KEY = 'chatStoricoFonteLaTavola';
+        const CHAT_LIMIT = 20;
+
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const linguaSelect = document.getElementById('lingua-select');
+        const voceSelect = document.getElementById('voce-select');
+        const modoSelect = document.getElementById('modo-select');
+
+        function leggi(chiave, predefinito) { try { return localStorage.getItem(chiave) || predefinito; } catch (e) { return predefinito; } }
+        function salva(chiave, valore) { try { localStorage.setItem(chiave, valore); } catch (e) {} }
+
+        function getStorico() {
+            try {
+                const storico = JSON.parse(localStorage.getItem(CHAT_KEY) || '[]');
+                return Array.isArray(storico) ? storico.slice(-CHAT_LIMIT) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function salvaStorico(storico) {
+            try {
+                localStorage.setItem(CHAT_KEY, JSON.stringify((Array.isArray(storico) ? storico : []).slice(-CHAT_LIMIT)));
+            } catch (e) {}
+        }
+
+        // Lingua iniziale: quella scelta in precedenza, altrimenti quella del browser, altrimenti italiano
+        function linguaIniziale() {
+            const salvata = leggi('lingua', '');
+            if (I18N[salvata]) return salvata;
+            const browser = (navigator.language || 'it').slice(0, 2).toLowerCase();
+            return I18N[browser] ? browser : 'it';
+        }
+        let lingua = linguaIniziale();
+        const t = (chiave) => I18N[lingua][chiave];
+
+        // === Riconoscimento vocale ===
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                userInput.value = event.results[0][0].transcript;
+                inviaMessaggio(true);
+            };
+            recognition.onerror = (event) => {
+                console.error('Errore riconoscimento:', event.error);
+                stopListening();
+                if (event.error === 'not-allowed') alert(t('micBloccato'));
+            };
+            recognition.onend = () => { stopListening(); };
+        } else {
+            micBtn.disabled = true;
+            micBtn.style.opacity = '0.5';
+        }
+
+        function startListening() {
+            if (!recognition || isListening) return;
+            try {
+                recognition.lang = t('reco');
+                recognition.start();
+                isListening = true;
+                micBtn.classList.add('listening');
+                fermaAudio();
+            } catch (e) { console.error(e); }
+        }
+        function stopListening() {
+            if (!recognition) return;
+            try { recognition.stop(); } catch (e) {}
+            isListening = false;
+            micBtn.classList.remove('listening');
+        }
+        micBtn.addEventListener('click', () => { if (isListening) stopListening(); else startListening(); });
+
+        // === Lingua e impostazioni ===
+        Object.keys(I18N).forEach(codice => {
+            const o = document.createElement('option');
+            o.value = codice;
+            o.textContent = I18N[codice].nome;
+            linguaSelect.appendChild(o);
+        });
+
+        function popolaVoci() {
+            voceSelect.replaceChildren();
+            VOCI[lingua].forEach(([chiave, nome, genere]) => {
+                const o = document.createElement('option');
+                o.value = chiave;
+                o.textContent = `${nome} (${genere ? t('uomo') : t('donna')})`;
+                voceSelect.appendChild(o);
+            });
+            voceSelect.value = leggi('voce_' + lingua, VOCI[lingua][0][0]);
+            if (!voceSelect.value) voceSelect.value = VOCI[lingua][0][0];
+        }
+
+        function applicaLingua() {
+            document.documentElement.lang = lingua;
+            linguaSelect.value = lingua;
+            document.getElementById('sottotitolo').textContent = t('sottotitolo');
+            document.getElementById('benvenuto').textContent = t('benvenuto');
+            userInput.placeholder = t('segnaposto');
+            typingIndicator.textContent = t('pensando');
+            document.getElementById('settings-btn').title = t('impostazioni');
+            document.getElementById('et-voce').textContent = t('voce');
+            document.getElementById('et-modo').textContent = t('modo');
+            document.getElementById('prova-btn').textContent = t('prova');
+            micBtn.title = t('parla');
+            sendBtn.title = t('invia');
+            if (!recognition) micBtn.title = t('micNonSupp');
+            modoSelect.options[0].textContent = t('modoMic');
+            modoSelect.options[1].textContent = t('modoSempre');
+            modoSelect.options[2].textContent = t('modoMai');
+            document.querySelectorAll('.ascolta').forEach(b => { b.textContent = t('riascolta'); });
+            popolaVoci();
+        }
+
+        linguaSelect.addEventListener('change', () => {
+            lingua = linguaSelect.value;
+            salva('lingua', lingua);
+            fermaAudio();
+            applicaLingua();
+        });
+        voceSelect.addEventListener('change', () => salva('voce_' + lingua, voceSelect.value));
+        modoSelect.value = leggi('modo', 'microfono');
+        modoSelect.addEventListener('change', () => salva('modo', modoSelect.value));
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            document.getElementById('settings').classList.toggle('open');
+        });
+
+        // === Riproduzione audio ===
+        let audioCorrente = null;
+        function fermaAudio() {
+            if (audioCorrente) { audioCorrente.pause(); audioCorrente = null; }
+        }
+        function riproduci(base64) {
+            fermaAudio();
+            audioCorrente = new Audio('data:audio/mpeg;base64,' + base64);
+            return audioCorrente.play().catch(e => console.error('Errore riproduzione:', e));
+        }
+
+        document.getElementById('prova-btn').addEventListener('click', async () => {
+            const bottone = document.getElementById('prova-btn');
+            bottone.disabled = true;
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ anteprima: true, voce: voceSelect.value, lingua })
+                });
+                const data = await response.json();
+                if (data.audio) riproduci(data.audio);
+                else alert(data.risposta || t('anteprimaNo'));
+            } catch (e) {
+                alert(t('errConn'));
+            } finally {
+                bottone.disabled = false;
+            }
+        });
+
+        // === Invio messaggio ===
+        async function inviaMessaggio(daVoce = false) {
+            const testo = userInput.value.trim();
+            if (testo === "") return;
+
+            const vuoleAudio = modoSelect.value === 'sempre' || (modoSelect.value === 'microfono' && daVoce);
+            const storico = getStorico();
+
+            aggiungiMessaggio(testo, 'user');
+            userInput.value = '';
+
+            typingIndicator.style.display = 'block';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messaggio: testo, voce: voceSelect.value, audio: vuoleAudio, lingua, storico })
+                });
+
+                const data = await response.json();
+                const nuovoStorico = [
+                    ...storico,
+                    { role: 'user', content: testo },
+                    { role: 'assistant', content: data.risposta || '' }
+                ].slice(-CHAT_LIMIT);
+                salvaStorico(nuovoStorico);
+
+                typingIndicator.style.display = 'none';
+                aggiungiMessaggio(data.risposta || t('errSconosciuto'), 'bot', data.audio);
+                if (data.audio) riproduci(data.audio);
+
+            } catch (error) {
+                typingIndicator.style.display = 'none';
+                aggiungiMessaggio(t('errConn'), 'bot');
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function aggiungiMessaggio(testo, tipo, audio) {
+            const div = document.createElement('div');
+            div.className = `message ${tipo}`;
+            const contenuto = document.createElement('div');
+            contenuto.innerText = testo;
+            div.appendChild(contenuto);
+            if (audio) {
+                const bottone = document.createElement('button');
+                bottone.type = 'button';
+                bottone.className = 'ascolta';
+                bottone.textContent = t('riascolta');
+                bottone.addEventListener('click', () => riproduci(audio));
+                div.appendChild(bottone);
+            }
+            chatContainer.insertBefore(div, typingIndicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        sendBtn.addEventListener('click', () => inviaMessaggio(false));
+        userInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') inviaMessaggio(false);
+        });
+
+        applicaLingua();
+    </script>
+</body>
+</html>

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Assistente - Fonte La Tavola</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; max-width: 640px; margin: auto; }
+        h1 { color: #5A1A1A; }
+        h2 { color: #5A1A1A; font-size: 1.05rem; margin: 18px 0 6px; }
+        .box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input[type="text"], input[type="password"], input[type="search"], textarea { width: 100%; padding: 12px; margin: 6px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 1rem; font-family: inherit; }
+        button { background: #5A1A1A; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 1rem; }
+        button:active { transform: scale(0.98); }
+        #mic-btn { background: #C6A664; color: #5A1A1A; margin-left: 10px; }
+        #status { margin: 0 0 16px; font-weight: bold; min-height: 1.2em; }
+        .hint { font-size: 0.85rem; color: #666; line-height: 1.5; margin-top: 12px; }
+        .hidden { display: none; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
+        li.vuoto { color: #999; font-style: italic; border-bottom: none; }
+        li .nome { flex: 1; min-width: 0; }
+        li .nome small { display: block; color: #888; }
+        li.off .nome { color: #aaa; text-decoration: line-through; }
+        li .btns { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; max-width: 55%; }
+        li button { padding: 6px 10px; font-size: 0.8rem; }
+        button.ok { background: #2e7d32; }
+        button.no { background: #b23b3b; }
+        button.grigio { background: #888; }
+        .azioni { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+        .azioni button { background: #888; font-size: 0.9rem; padding: 10px 14px; }
+        .conta { color: #999; font-weight: normal; font-size: 0.9rem; }
+        #aggiornato { font-size: 0.8rem; color: #999; margin-top: 12px; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tabs button { flex: 1; background: #ddd; color: #5A1A1A; }
+        .tabs button.on { background: #5A1A1A; color: white; }
+        details { margin: 8px 0; border: 1px solid #eee; border-radius: 8px; padding: 0 12px; }
+        summary { cursor: pointer; padding: 10px 0; font-weight: bold; color: #5A1A1A; }
+        dialog { border: none; border-radius: 12px; padding: 20px; width: min(92vw, 520px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        dialog::backdrop { background: rgba(0,0,0,0.5); }
+        dialog label { display: block; font-size: 0.85rem; color: #555; margin-top: 10px; }
+        .riga-btn { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+        .riga-btn button { flex: 1; }
+    </style>
+</head>
+<body>
+
+    <h1>Gestione Assistente</h1>
+
+    <!-- Login -->
+    <div id="login-box" class="box">
+        <label>Inserisci codice di accesso:</label>
+        <input type="password" id="password" placeholder="Codice...">
+        <button onclick="accedi()">Accedi</button>
+    </div>
+
+    <div id="app" class="hidden">
+        <div class="tabs">
+            <button id="tab-sit" class="on" onclick="mostraTab('sit')">Situazione</button>
+            <button id="tab-menu" onclick="mostraTab('menu')">Menu</button>
+        </div>
+        <div id="status"></div>
+
+        <!-- ======== SITUAZIONE ======== -->
+        <div id="sez-sit">
+            <div class="box">
+                <p style="margin-top:0">Di' o scrivi un comando.</p>
+                <div style="display: flex;">
+                    <input type="text" id="command-input" placeholder="Comando...">
+                    <button id="mic-btn" title="Parla">🎤</button>
+                </div>
+                <button onclick="inviaComando()" style="margin-top: 10px; width: 100%;">Invia Comando</button>
+                <div class="hint">
+                    <b>Esempi</b><br>
+                    • "Piatto del giorno: funghi cardoncelli fritti" (ogni comando ne aggiunge uno; per più piatti in un colpo separali con ;)<br>
+                    • "Togli piatto del giorno cardoncelli" / "Elimina i piatti del giorno"<br>
+                    • "Tagliata esaurita" / "Tignanello finito" (per i vini serve il nome abbastanza preciso)<br>
+                    • "Ripristina tagliata" / "Tagliata di nuovo disponibile" / "Ripristina tutto"
+                </div>
+            </div>
+
+            <div class="box">
+                <h1 style="font-size: 1.2rem; margin-top: 0;">Situazione di oggi</h1>
+
+                <h2>🍽 Piatti del giorno <span class="conta" id="n-giorno"></span></h2>
+                <ul id="lista-giorno"></ul>
+
+                <h2>❌ Piatti non disponibili <span class="conta" id="n-piatti"></span></h2>
+                <ul id="lista-piatti"></ul>
+
+                <h2>🍷 Vini non disponibili <span class="conta" id="n-vini"></span></h2>
+                <ul id="lista-vini"></ul>
+
+                <div class="azioni">
+                    <button id="btn-svuota-giorno" onclick="svuotaGiorno()">Elimina tutti i piatti del giorno</button>
+                    <button id="btn-ripristina-tutto" onclick="ripristinaTutto()">Ripristina tutto</button>
+                    <button onclick="ricarica()">Aggiorna report</button>
+                </div>
+                <div id="aggiornato"></div>
+            </div>
+        </div>
+
+        <!-- ======== MENU ======== -->
+        <div id="sez-menu" class="hidden">
+            <div class="box">
+                <input type="search" id="cerca" placeholder="Cerca un piatto o un vino...">
+                <div class="azioni" style="margin-top: 8px;">
+                    <button onclick="apriForm('piatto')">+ Aggiungi piatto</button>
+                    <button onclick="apriForm('vino')">+ Aggiungi vino</button>
+                </div>
+
+                <h2>🍽 Piatti <span class="conta" id="n-menu-piatti"></span></h2>
+                <div id="menu-piatti"></div>
+
+                <h2>🍷 Vini <span class="conta" id="n-menu-vini"></span></h2>
+                <div id="menu-vini"></div>
+            </div>
+
+            <div class="box">
+                <h2 style="margin-top:0">Importa / esporta</h2>
+                <div class="azioni" style="margin-top:0">
+                    <button onclick="esportaMenu()">Esporta menu (JSON)</button>
+                </div>
+                <details>
+                    <summary>Importa un menu da JSON</summary>
+                    <p class="hint">Sostituisce tutto il menu attuale (piatti e vini). Scegli un file oppure incolla il testo.</p>
+                    <input type="file" id="file-import" accept=".json,application/json">
+                    <textarea id="testo-import" rows="6" placeholder='{ "piatti": [...], "vini": [...] }'></textarea>
+                    <button onclick="importaMenu()" style="width:100%">Importa e sostituisci il menu</button>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form modifica voce -->
+    <dialog id="dlg">
+        <h2 id="dlg-titolo" style="margin-top:0"></h2>
+        <label>Nome<input type="text" id="f-nome"></label>
+        <label><span id="f-cat-et">Categoria</span><input type="text" id="f-cat" list="lista-cat"></label>
+        <datalist id="lista-cat"></datalist>
+        <label>Prezzo (es. 12,00)<input type="text" id="f-prezzo"></label>
+        <label id="g-allergeni">Allergeni<input type="text" id="f-allergeni"></label>
+        <label id="g-regione">Regione / Paese<input type="text" id="f-regione"></label>
+        <label id="g-nota">Nota (es. "In arrivo nuova annata")<input type="text" id="f-nota"></label>
+        <div class="riga-btn">
+            <button onclick="salvaForm()">Salva</button>
+            <button class="no" id="f-elimina" onclick="eliminaForm()">Elimina</button>
+            <button class="grigio" onclick="document.getElementById('dlg').close()">Annulla</button>
+        </div>
+    </dialog>
+
+    <script>
+        const API_URL = "/api/aggiorna";
+        let codice = sessionStorage.getItem('codice') || '';
+        let stato = null;                 // { giorno: [...], menu: { piatti: [...], vini: [...] } }
+        const aperti = new Set();         // gruppi del menu aperti
+        let inModifica = null;            // { tipo, id } della voce nel form (id null = nuova)
+
+        const $ = (id) => document.getElementById(id);
+
+        async function chiama(metodo, corpo) {
+            const risposta = await fetch(API_URL, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json', 'x-codice': codice },
+                body: corpo ? JSON.stringify(corpo) : undefined
+            });
+            const dati = await risposta.json().catch(() => ({}));
+            return { ok: risposta.ok, status: risposta.status, dati };
+        }
+
+        function mostraLogin() {
+            $('login-box').classList.remove('hidden');
+            $('app').classList.add('hidden');
+        }
+        function mostraApp() {
+            $('login-box').classList.add('hidden');
+            $('app').classList.remove('hidden');
+        }
+        function mostraTab(t) {
+            $('sez-sit').classList.toggle('hidden', t !== 'sit');
+            $('sez-menu').classList.toggle('hidden', t !== 'menu');
+            $('tab-sit').classList.toggle('on', t === 'sit');
+            $('tab-menu').classList.toggle('on', t === 'menu');
+        }
+
+        async function accedi() {
+            codice = $('password').value.trim();
+            try {
+                const r = await chiama('GET');
+                if (r.status === 401) { alert("Codice errato"); codice = ''; return; }
+                if (!r.ok) { alert(r.dati.messaggio || "Errore"); return; }
+                sessionStorage.setItem('codice', codice);
+                mostraApp();
+                disegna(r.dati.report);
+            } catch (e) {
+                alert("Errore di connessione.");
+            }
+        }
+        $('password').addEventListener('keypress', (e) => { if (e.key === 'Enter') accedi(); });
+
+        async function ricarica() {
+            try {
+                const r = await chiama('GET');
+                if (r.status === 401) { sessionStorage.removeItem('codice'); mostraLogin(); return; }
+                if (r.ok) disegna(r.dati.report);
+            } catch (e) {}
+        }
+
+        // Esegue un'azione e aggiorna tutto con la risposta del server
+        async function esegui(corpo) {
+            $('status').innerText = "Invio in corso...";
+            try {
+                const r = await chiama('POST', corpo);
+                if (r.status === 401) { sessionStorage.removeItem('codice'); mostraLogin(); return false; }
+                $('status').innerText = r.dati.messaggio || (r.ok ? "Fatto!" : "Errore.");
+                if (r.dati.report) disegna(r.dati.report);
+                return r.ok;
+            } catch (error) {
+                $('status').innerText = "Errore di connessione.";
+                return false;
+            }
+        }
+
+        function disegna(r) {
+            stato = r;
+            disegnaReport();
+            disegnaMenu();
+        }
+
+        // ---------- Situazione ----------
+        function riga(nome, sotto, bottoni, spento) {
+            const li = document.createElement('li');
+            if (spento) li.className = 'off';
+            const n = document.createElement('div');
+            n.className = 'nome';
+            n.textContent = nome;
+            if (sotto) { const s = document.createElement('small'); s.textContent = sotto; n.appendChild(s); }
+            const b = document.createElement('div');
+            b.className = 'btns';
+            bottoni.forEach(([testo, classe, fn]) => {
+                const bt = document.createElement('button');
+                bt.className = classe || '';
+                bt.textContent = testo;
+                bt.addEventListener('click', fn);
+                b.appendChild(bt);
+            });
+            li.append(n, b);
+            return li;
+        }
+        function vuoto(ul) {
+            const li = document.createElement('li');
+            li.className = 'vuoto';
+            li.textContent = 'Nessuno';
+            ul.appendChild(li);
+        }
+
+        function disegnaReport() {
+            const g = stato.giorno, m = stato.menu;
+            const piattiOff = m.piatti.filter(p => !p.disponibile);
+            const viniOff = m.vini.filter(v => !v.disponibile);
+
+            const ulG = $('lista-giorno'); ulG.replaceChildren();
+            g.forEach(nome => ulG.appendChild(riga(nome, '', [['Elimina', 'no', () => esegui({ azione: 'rimuovi_giorno_esatto', nome })]])));
+            if (!g.length) vuoto(ulG);
+            $('n-giorno').textContent = g.length ? `(${g.length})` : '';
+
+            const ulP = $('lista-piatti'); ulP.replaceChildren();
+            piattiOff.forEach(p => ulP.appendChild(riga(p.nome, '', [['Ripristina', 'ok', () => esegui({ azione: 'disponibilita', tipo: 'piatto', id: p.id, disponibile: true })]])));
+            if (!piattiOff.length) vuoto(ulP);
+            $('n-piatti').textContent = piattiOff.length ? `(${piattiOff.length})` : '';
+
+            const ulV = $('lista-vini'); ulV.replaceChildren();
+            viniOff.forEach(v => ulV.appendChild(riga(v.nome, v.nota || '', [['Ripristina', 'ok', () => esegui({ azione: 'disponibilita', tipo: 'vino', id: v.id, disponibile: true })]])));
+            if (!viniOff.length) vuoto(ulV);
+            $('n-vini').textContent = viniOff.length ? `(${viniOff.length})` : '';
+
+            $('btn-svuota-giorno').classList.toggle('hidden', !g.length);
+            $('btn-ripristina-tutto').classList.toggle('hidden', !(piattiOff.length || viniOff.length));
+            $('aggiornato').innerText = 'Aggiornato alle ' + new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function svuotaGiorno() {
+            if (confirm("Eliminare tutti i piatti del giorno?")) esegui({ azione: 'svuota_giorno' });
+        }
+        function ripristinaTutto() {
+            if (confirm("Rendere di nuovo disponibili tutti i piatti e i vini?")) esegui({ azione: 'ripristina_tutto' });
+        }
+
+        async function inviaComando() {
+            const input = $('command-input');
+            const comando = input.value.trim();
+            if (!comando) return;
+            if (await esegui({ comando })) input.value = '';
+        }
+        $('command-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') inviaComando(); });
+
+        // ---------- Menu ----------
+        const minuscolo = (s) => String(s || '').toLowerCase();
+
+        function disegnaGruppi(contenitore, tipo, voci, campoGruppo, etichettaConta) {
+            const q = minuscolo($('cerca').value).trim();
+            const filtrate = q ? voci.filter(v => minuscolo(v.nome).includes(q)) : voci;
+            $(etichettaConta).textContent = `(${voci.length})`;
+            const box = $(contenitore);
+            box.replaceChildren();
+            if (!filtrate.length) { const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'Nessuna voce trovata.'; box.appendChild(p); return; }
+
+            const gruppi = new Map();
+            filtrate.forEach(v => {
+                const k = v[campoGruppo] || 'Altro';
+                if (!gruppi.has(k)) gruppi.set(k, []);
+                gruppi.get(k).push(v);
+            });
+            gruppi.forEach((lista, nomeGruppo) => {
+                const chiave = tipo + ':' + nomeGruppo;
+                const det = document.createElement('details');
+                det.open = !!q || aperti.has(chiave);
+                det.addEventListener('toggle', () => { if (det.open) aperti.add(chiave); else aperti.delete(chiave); });
+                const sum = document.createElement('summary');
+                sum.textContent = `${nomeGruppo} (${lista.length})`;
+                det.appendChild(sum);
+                const ul = document.createElement('ul');
+                lista.forEach(v => {
+                    const sotto = [v.prezzo ? v.prezzo + ' €' : '', tipo === 'vino' ? v.regione : '', v.nota || ''].filter(Boolean).join(' · ');
+                    ul.appendChild(riga(v.nome, sotto, [
+                        ['Modifica', 'grigio', () => apriForm(tipo, v.id)],
+                        v.disponibile
+                            ? ['Esaurito', 'no', () => esegui({ azione: 'disponibilita', tipo, id: v.id, disponibile: false })]
+                            : ['Ripristina', 'ok', () => esegui({ azione: 'disponibilita', tipo, id: v.id, disponibile: true })],
+                        ['🗑 Elimina', 'no', () => eliminaVoce(tipo, v)]
+                    ], !v.disponibile));
+                });
+                det.appendChild(ul);
+                box.appendChild(det);
+            });
+        }
+
+        function disegnaMenu() {
+            disegnaGruppi('menu-piatti', 'piatto', stato.menu.piatti, 'categoria', 'n-menu-piatti');
+            disegnaGruppi('menu-vini', 'vino', stato.menu.vini, 'tipo', 'n-menu-vini');
+        }
+        $('cerca').addEventListener('input', () => { if (stato) disegnaMenu(); });
+
+        // ---------- Form di modifica ----------
+        function apriForm(tipo, id) {
+            const lista = tipo === 'vino' ? stato.menu.vini : stato.menu.piatti;
+            const v = id != null ? lista.find(x => x.id === id) : null;
+            inModifica = { tipo, id: v ? v.id : null };
+
+            $('dlg-titolo').textContent = (v ? 'Modifica ' : 'Nuovo ') + (tipo === 'vino' ? 'vino' : 'piatto');
+            $('f-cat-et').textContent = tipo === 'vino' ? 'Tipo (es. Rosso, Bianco, Bollicine)' : 'Categoria (es. Antipasti, Primi piatti)';
+            $('g-allergeni').classList.toggle('hidden', tipo === 'vino');
+            $('g-regione').classList.toggle('hidden', tipo !== 'vino');
+            $('g-nota').classList.toggle('hidden', tipo !== 'vino');
+            $('f-elimina').classList.toggle('hidden', !v);
+
+            const campoGruppo = tipo === 'vino' ? 'tipo' : 'categoria';
+            const dl = $('lista-cat'); dl.replaceChildren();
+            [...new Set(lista.map(x => x[campoGruppo]).filter(Boolean))].forEach(c => {
+                const o = document.createElement('option'); o.value = c; dl.appendChild(o);
+            });
+
+            $('f-nome').value = v ? v.nome : '';
+            $('f-cat').value = v ? (v[campoGruppo] || '') : '';
+            $('f-prezzo').value = v ? (v.prezzo || '') : '';
+            $('f-allergeni').value = v ? (v.allergeni || '') : '';
+            $('f-regione').value = v ? (v.regione || '') : '';
+            $('f-nota').value = v ? (v.nota || '') : '';
+            $('dlg').showModal();
+        }
+
+        async function salvaForm() {
+            const { tipo, id } = inModifica;
+            if (!$('f-nome').value.trim()) { alert('Il nome è obbligatorio.'); return; }
+            const voce = { id, nome: $('f-nome').value, prezzo: $('f-prezzo').value };
+            if (tipo === 'vino') {
+                voce.tipo = $('f-cat').value;
+                voce.regione = $('f-regione').value;
+                voce.nota = $('f-nota').value;
+            } else {
+                voce.categoria = $('f-cat').value;
+                voce.allergeni = $('f-allergeni').value;
+            }
+            if (await esegui({ azione: 'salva_voce', tipo, voce })) $('dlg').close();
+        }
+
+        // Elimina direttamente dalla lista del menu (con conferma)
+        async function eliminaVoce(tipo, v) {
+            const cosa = tipo === 'vino' ? 'il vino' : 'il piatto';
+            if (!confirm(`Eliminare definitivamente ${cosa} "${v.nome}" dal menu?`)) return;
+            await esegui({ azione: 'elimina_voce', tipo, id: v.id });
+        }
+
+        async function eliminaForm() {
+            const { tipo, id } = inModifica;
+            if (!confirm('Eliminare definitivamente questa voce dal menu?')) return;
+            if (await esegui({ azione: 'elimina_voce', tipo, id })) $('dlg').close();
+        }
+
+        // ---------- Importa / esporta ----------
+        function esportaMenu() {
+            const contenuto = JSON.stringify({ ristorante: 'Fonte La Tavola', piatti: stato.menu.piatti, vini: stato.menu.vini }, null, 2);
+            const url = URL.createObjectURL(new Blob([contenuto], { type: 'application/json' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'menu.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        $('file-import').addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            if (f) $('testo-import').value = await f.text();
+        });
+
+        async function importaMenu() {
+            let menu;
+            try { menu = JSON.parse($('testo-import').value); }
+            catch (e) { alert('Il testo non è un JSON valido.'); return; }
+            if (!menu || (!Array.isArray(menu.piatti) && !Array.isArray(menu.vini))) { alert('Nel JSON mancano "piatti" e "vini".'); return; }
+            const np = (menu.piatti || []).length, nv = (menu.vini || []).length;
+            if (!confirm(`Sostituire TUTTO il menu attuale con questo file (${np} piatti e ${nv} vini)?`)) return;
+            if (await esegui({ azione: 'importa_menu', menu })) {
+                $('testo-import').value = '';
+                $('file-import').value = '';
+            }
+        }
+
+        // ---------- Riconoscimento vocale ----------
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.onresult = (event) => { $('command-input').value = event.results[0][0].transcript; };
+        }
+        $('mic-btn').addEventListener('click', () => {
+            if (recognition) recognition.start();
+            else alert("Riconoscimento vocale non supportato");
+        });
+
+        // Se il codice è già in memoria (stessa sessione del browser) entra direttamente
+        if (codice) {
+            chiama('GET').then(r => {
+                if (r.ok) { mostraApp(); disegna(r.dati.report); }
+                else sessionStorage.removeItem('codice');
+            }).catch(() => {});
+        }
+    </script>
+</body>
+</html>
