@@ -196,7 +196,7 @@ export async function onRequestPost(context) {
       method: 'POST',
       headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
+        model: 'llama-3.3-70b-versatile',
         reasoning_effort: 'low',
         messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
         temperature: 0.5,
