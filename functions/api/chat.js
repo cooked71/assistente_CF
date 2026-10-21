@@ -197,11 +197,11 @@ export async function onRequestPost(context) {
       headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-specdec',
-        reasoning_effort: 'low',
         messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
-        temperature: 0.5,
+        temperature: 0.6,
       })
     });
+
 
     const groqData = await groqResponse.json();
     if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
