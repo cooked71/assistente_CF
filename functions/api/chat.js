@@ -207,4 +207,15 @@ export async function onRequestPost(context) {
 
     const groqData = await groqResponse.json();
     if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
+    const testoRisposta = groqData.choices[0].message.content;
+let audio = null;
+if (vuoleAudio) {
+audio = await sintetizza(testoRisposta, voceScelta, lingua, DEEPGRAM_API_KEY).catch(() => null);
+}
+return json({ risposta: testoRisposta, audio });
+} catch (error) {
+console.error('Errore esecuzione API:', error);
+return json({ risposta: msg.errore });
+}
+}
     
