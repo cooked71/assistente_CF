@@ -197,14 +197,14 @@ export async function onRequestPost(context) {
       headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        reasoning_effort: 'low',
         messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
-        temperature: 0.5,
+        temperature: 0.6,
       })
     });
 
     const groqData = await groqResponse.json();
     if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
+    
     const testoRisposta = groqData.choices[0].message.content;
 
     let audio = null;
@@ -213,7 +213,9 @@ export async function onRequestPost(context) {
     }
 
     return json({ risposta: testoRisposta, audio });
+
   } catch (error) {
+    console.error('Errore esecuzione API:', error);
     return json({ risposta: msg.errore });
   }
-}
+
