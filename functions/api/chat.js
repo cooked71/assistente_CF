@@ -218,4 +218,3 @@ export async function onRequestPost(context) {
     console.error('Errore esecuzione API:', error);
     return json({ risposta: msg.errore });
   }
-
