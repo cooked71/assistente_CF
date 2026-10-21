@@ -192,7 +192,7 @@ export async function onRequestPost(context) {
   const systemPrompt = "Sei l'assistente virtuale del ristorante 'Fonte La Tavola'. Il tuo tono è cordiale, professionale. Rispondi SEMPRE in " + LINGUE[lingua] + ". Mantieni in italiano i nomi dei piatti e dei vini. " + piattiGiornoTesto + " ATTENZIONE: i seguenti piatti NON SONO DISPONIBILI oggi: " + piattiEsauritiTesto + ". I seguenti vini NON SONO DISPONIBILI: " + viniEsauritiTesto + ". Non proporli assolutamente. Menu piatti disponibili: " + JSON.stringify(piattiPerIlModello) + ". Vini disponibili: " + JSON.stringify(viniPerIlModello) + ". REGOLE: Consiglia SOLO vini presenti nei disponibili. Sii conciso, massimo 2-3 frasi. Se l'utente scrive solo un colore o regione breve, interpreta usando lo storico.";
 
   try {
- const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -202,9 +202,6 @@ export async function onRequestPost(context) {
         temperature: 0.5,
       })
     });
-
-
-
 
     const groqData = await groqResponse.json();
     if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
