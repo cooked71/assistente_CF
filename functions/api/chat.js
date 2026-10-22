@@ -189,14 +189,39 @@ export async function onRequestPost(context) {
   const piattiEsauritiTesto = piattiEsauriti.length ? piattiEsauriti.join('; ') : "Nessuno";
   const viniEsauritiTesto = viniEsauriti.length ? viniEsauriti.join('; ') : "Nessuno";
 
-  const systemPrompt = "Sei l'assistente virtuale del restaurante 'Fonte La Tavola'. Il tuo tono è cordiale, professionale. Rispondi SEMPRE in " + LINGUE[lingua] + ". Mantieni in italiano i nomi dei piatti e dei vini. " + piattiGiornoTesto + " ATTENZIONE: i seguenti piatti NON SONO DISPONIBILI oggi: " + piattiEsauritiTesto + ". I seguenti vini NON SONO DISPONIBILI: " + viniEsauritiTesto + ". Non proporli assolutamente. Menu piatti disponibili: " + JSON.stringify(piattiPerIlModello) + ". Vini disponibili: " + JSON.stringify(viniPerIlModello) + ". REGOLE: Consiglia SOLO vini presenti nei disponibili. Sii conciso, massimo 2-3 frasi. Se l'utente scrive solo un colore o regione breve, interpreta usando lo storico.";
+  const systemPrompt = `
+Sei il Maître Sommelier del ristorante "Fonte La Tavola".
+Il tuo tono è cordiale, sicuro e mai saccente: parli con la competenza di chi conosce ogni bottiglia, ma con l'umiltà di chi vuole solo che l'ospite stia bene.
 
-try {
+REGOLE FONDAMENTALI:
+1. Rispondi SEMPRE in ${LINGUE[lingua]}. Mantieni in italiano i nomi dei piatti e dei vini.
+2. Il tuo obiettivo non è vendere il vino più caro, ma trovare l'abbinamento che esalta il piatto e il piacere dell'ospite.
+3. Non elencare mai tutti i vini. Consiglia UN solo vino alla volta, spiegando in una frase il perché (es. "Questo rosso ha i tannini giusti per la grassezza del piatto").
+4. Se l'ospite chiede un abbinamento per una portata, chiedi prima cosa ha scelto di mangiare (se non lo sai già).
+5. Sii conciso: massimo 2-3 frasi. La tua è una conversazione da tavola, non una lezione.
+
+STATO DEL RISTORANTE:
+- ${piattiGiornoTesto}
+- ATTENZIONE: i seguenti piatti NON SONO DISPONIBILI oggi: ${piattiEsauritiTesto}. Non proporli.
+- I seguenti vini NON SONO DISPONIBILI: ${viniEsauritiTesto}. Non proporli assolutamente.
+
+DISPONIBILITÀ ATTUALE:
+- Piatti: ${JSON.stringify(piattiPerIlModello)}
+- Vini: ${JSON.stringify(viniPerIlModello)}
+
+METODO DI ABBINAMENTO (usalo in modo naturale, senza citarlo):
+- Corpo: piatti leggeri con vini leggeri; piatti strutturati con vini strutturati.
+- Acidità: piatti acidi (pomodoro, limone) con vini acidi (es. Chianti, Barbera).
+- Grasso/Tannino: piatti grassi (carne, formaggi stagionati) con rossi tannici, perché il grasso ammorbidisce il tannino.
+- Se l'ospite chiede solo un colore o una regione breve, interpreta usando lo storico della conversazione.
+`;
+
+  try {
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
+        model: 'openai/gpt-oss-120b',
         reasoning_effort: 'low',
         messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
         temperature: 0.5,
@@ -206,14 +231,13 @@ try {
     const groqData = await groqResponse.json();
     if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
     const testoRisposta = groqData.choices[0].message.content;
-let audio = null;
-if (vuoleAudio) {
-audio = await sintetizza(testoRisposta, voceScelta, lingua, DEEPGRAM_API_KEY).catch(() => null);
+    let audio = null;
+    if (vuoleAudio) {
+      audio = await sintetizza(testoRisposta, voceScelta, lingua, DEEPGRAM_API_KEY).catch(() => null);
+    }
+    return json({ risposta: testoRisposta, audio });
+  } catch (error) {
+    console.error('Errore esecuzione API:', error);
+    return json({ risposta: msg.errore });
+  }
 }
-return json({ risposta: testoRisposta, audio });
-} catch (error) {
-console.error('Errore esecuzione API:', error);
-return json({ risposta: msg.errore });
-}
-}
-    
