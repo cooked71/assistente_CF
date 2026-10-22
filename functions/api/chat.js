@@ -110,7 +110,7 @@ async function sintetizza(testo, voceScelta, lingua, chiave) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const r = await fetch("https://deepgram.com" + encodeURIComponent(modello), {
+  const r = await fetch("https://api.deepgram.com/v1/speak?model=" + encodeURIComponent(modello), {
     method: 'POST',
     headers: { 'Authorization': "Token " + chiave, 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: pulito })
@@ -192,7 +192,7 @@ export async function onRequestPost(context) {
   const systemPrompt = "Sei l'assistente virtuale del restaurante 'Fonte La Tavola'. Il tuo tono è cordiale, professionale. Rispondi SEMPRE in " + LINGUE[lingua] + ". Mantieni in italiano i nomi dei piatti e dei vini. " + piattiGiornoTesto + " ATTENZIONE: i seguenti piatti NON SONO DISPONIBILI oggi: " + piattiEsauritiTesto + ". I seguenti vini NON SONO DISPONIBILI: " + viniEsauritiTesto + ". Non proporli assolutamente. Menu piatti disponibili: " + JSON.stringify(piattiPerIlModello) + ". Vini disponibili: " + JSON.stringify(viniPerIlModello) + ". REGOLE: Consiglia SOLO vini presenti nei disponibili. Sii conciso, massimo 2-3 frasi. Se l'utente scrive solo un colore o regione breve, interpreta usando lo storico.";
 
   try {
-    const groqResponse = await fetch('https://groq.com', {
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 
         'Authorization': "Bearer " + GROQ_API_KEY, 
