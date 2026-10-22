@@ -29,6 +29,8 @@ const MSG = {
 const json = (oggetto, status = 200) =>
   new Response(JSON.stringify(oggetto), { status, headers: { 'Content-Type': 'application/json' } });
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 function normalizzaTesto(t) {
   return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’‘`´]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -124,6 +126,34 @@ async function sintetizza(testo, voceScelta, lingua, chiave) {
   return btoa(bin);
 }
 
+async function chiediGroq(systemPrompt, storico, domandaFinale, chiave, tentativi = 3) {
+  let ultimoErrore = null;
+  for (let i = 0; i < tentativi; i++) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': "Bearer " + chiave, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-120b',
+          reasoning_effort: 'medium',
+          messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
+          temperature: 0.5,
+        })
+      });
+      const dati = await r.json();
+      if (!r.ok) throw new Error(dati.error?.message || 'Errore Groq');
+      const testo = dati.choices?.[0]?.message?.content;
+      if (!testo || !testo.trim()) throw new Error('Risposta Groq vuota');
+      return testo;
+    } catch (e) {
+      ultimoErrore = e;
+      console.error(`Tentativo ${i + 1}/${tentativi} fallito:`, e.message);
+      if (i < tentativi - 1) await sleep(800 * (i + 1)); // 800ms, 1600ms
+    }
+  }
+  throw ultimoErrore;
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -190,55 +220,23 @@ export async function onRequestPost(context) {
   const viniEsauritiTesto = viniEsauriti.length ? viniEsauriti.join('; ') : "Nessuno";
 
   const systemPrompt = `
-Sei il Maître Sommelier del ristorante "Fonte La Tavola".
-Il tuo tono è cordiale, sicuro e mai saccente: parli con la competenza di chi conosce ogni bottiglia, ma con l'umiltà di chi vuole solo che l'ospite stia bene.
+Sei il Maître Sommelier di "Fonte La Tavola". Tono cordiale, sicuro, mai saccente. Rispondi SEMPRE in ${LINGUE[lingua]}, mantenendo in italiano i nomi di piatti e vini.
 
-REGOLE FONDAMENTALI:
-1. Rispondi SEMPRE in ${LINGUE[lingua]}. Mantieni in italiano i nomi dei piatti e dei vini.
-2. Il tuo obiettivo non è vendere il vino più caro, ma trovare l'abbinamento che esalta il piatto e il piacere dell'ospite.
+PIATTI: quando l'ospite cita un piatto o una categoria ("agnello", "brace", "pesce"), cita TUTTI i piatti del menu che vi rientrano (es. "agnello" → carré e stinco; "brace" → tagliata, carré, costine). Se non ha ancora scelto, chiedigli cosa mangia.
 
-REGOLE SUI PIATTI:
-3. Quando l'ospite cita un piatto o una categoria (es. "agnello", "brace", "pesce"), considera SEMPRE TUTTI i piatti del menu che rientrano in quella richiesta, anche se hanno nomi diversi. Esempi:
-   - "agnello" → carré d'agnello, stinco d'agnello, costolette d'agnello: citali tutti.
-   - "brace" → tagliata di rib-eye, carré, costina, e ogni altra voce cotta alla brace: citali tutti.
-   - "pesce" → tutti i piatti di pesce disponibili.
-4. Se l'ospite chiede un abbinamento per una portata, chiedi prima cosa ha scelto di mangiare (se non lo sai già). Se ha già indicato un piatto o una categoria, non richiedere: procedi.
+VINI: consiglia UN solo vino, spiegando in una frase il perché. Massimo 3-4 frasi totali.
 
-REGOLE SUI VINI:
-5. Consiglia UN solo vino alla volta, spiegando in una frase il perché (es. "Questo rosso ha i tannini giusti per la grassezza del piatto"). Puoi menzionare che è la tua scelta migliore tra le alternative, ma non elencare tutti i vini.
-6. Sii conciso: massimo 3-4 frasi. La tua è una conversazione da tavola, non una lezione.
-
-STATO DEL RISTORANTE:
+STATO:
 - ${piattiGiornoTesto}
-- ATTENZIONE: i seguenti piatti NON SONO DISPONIBILI oggi: ${piattiEsauritiTesto}. Non proporli.
-- I seguenti vini NON SONO DISPONIBILI: ${viniEsauritiTesto}. Non proporli assolutamente.
+- NON disponibili oggi — piatti: ${piattiEsauritiTesto}; vini: ${viniEsauritiTesto}.
+- Piatti disponibili: ${JSON.stringify(piattiPerIlModello)}
+- Vini disponibili: ${JSON.stringify(viniPerIlModello)}
 
-DISPONIBILITÀ ATTUALE:
-- Piatti: ${JSON.stringify(piattiPerIlModello)}
-- Vini: ${JSON.stringify(viniPerIlModello)}
-
-METODO DI ABBINAMENTO (usalo in modo naturale, senza citarlo):
-- Corpo: piatti leggeri con vini leggeri; piatti strutturati con vini strutturati.
-- Acidità: piatti acidi (pomodoro, limone) con vini acidi (es. Chianti, Barbera).
-- Grasso/Tannino: piatti grassi (carne, formaggi stagionati) con rossi tannici, perché il grasso ammorbidisce il tannino.
-- Se l'ospite chiede solo un colore o una regione breve, interpreta usando lo storico della conversazione.
+ABBINAMENTI: corpo con corpo, acidità con acidità, grasso con tannino. Se l'ospite scrive solo un colore o una regione, usa lo storico.
 `;
 
   try {
-    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': "Bearer " + GROQ_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
-        reasoning_effort: 'low',
-        messages: [{ role: 'system', content: systemPrompt }, ...storico, { role: 'user', content: domandaFinale }],
-        temperature: 0.5,
-      })
-    });
-
-    const groqData = await groqResponse.json();
-    if (!groqResponse.ok) throw new Error(groqData.error?.message || 'Errore Groq');
-    const testoRisposta = groqData.choices[0].message.content;
+    const testoRisposta = await chiediGroq(systemPrompt, storico, domandaFinale, GROQ_API_KEY);
     let audio = null;
     if (vuoleAudio) {
       audio = await sintetizza(testoRisposta, voceScelta, lingua, DEEPGRAM_API_KEY).catch(() => null);
